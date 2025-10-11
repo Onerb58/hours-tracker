@@ -3,7 +3,13 @@
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 // TODO: Replace with your Firebase project configuration
 // Get this from Firebase Console > Project Settings > General > Your apps > Web app
@@ -22,27 +28,62 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore
 const db = getFirestore(app);
 
-// Initialize Auth (for anonymous authentication)
+// Initialize Auth (for Google Sign-In)
 const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
-// Sign in anonymously when the app loads
+// Current user state
 let currentUser = null;
 
-const initAuth = async () => {
+// Sign in with Google
+const signInWithGoogle = async () => {
   try {
-    const userCredential = await signInAnonymously(auth);
-    currentUser = userCredential.user;
-    console.log('Signed in anonymously with UID:', currentUser.uid);
+    const result = await signInWithPopup(auth, googleProvider);
+    currentUser = result.user;
+    console.log('Signed in with Google:', currentUser.email);
     return currentUser;
   } catch (error) {
-    console.error('Error signing in anonymously:', error);
+    console.error('Error signing in with Google:', error);
     throw error;
   }
 };
 
-// Get current user ID (use this for Firestore paths)
-const getUserId = () => {
-  return currentUser ? currentUser.uid : 'default-user';
+// Sign out
+const signOutUser = async () => {
+  try {
+    await signOut(auth);
+    currentUser = null;
+    console.log('User signed out');
+  } catch (error) {
+    console.error('Error signing out:', error);
+    throw error;
+  }
 };
 
-export { db, auth, initAuth, getUserId };
+// Listen for auth state changes
+const onAuthStateChange = (callback) => {
+  return onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    callback(user);
+  });
+};
+
+// Get current user ID (use this for Firestore paths)
+const getUserId = () => {
+  return currentUser ? currentUser.uid : null;
+};
+
+// Get current user info
+const getCurrentUser = () => {
+  return currentUser;
+};
+
+export {
+  db,
+  auth,
+  signInWithGoogle,
+  signOutUser,
+  onAuthStateChange,
+  getUserId,
+  getCurrentUser
+};

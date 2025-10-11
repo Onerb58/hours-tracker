@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firestore Debug</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #00ff00;
+    }
+    pre {
+      background: #000;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px 5px;
+      background: #00ff00;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background: #00cc00;
+    }
+    .error {
+      color: #ff0000;
+    }
+    .success {
+      color: #00ff00;
+    }
+  </style>
+</head>
+<body>
+  <h1>Firestore Connection Debugger</h1>
+  <button onclick="testConnection()">Test Firebase Connection</button>
+  <button onclick="testAuth()">Test Authentication</button>
+  <button onclick="listAllData()">List All Data</button>
+  <button onclick="clearOutput()">Clear</button>
+
+  <div id="output"></div>
+
+  <script type="module">
+    import { db, auth, initAuth, getUserId } from './firebase-config.js';
+    import {
+      collection,
+      getDocs,
+      doc,
+      getDoc
+    } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    window.db = db;
+    window.auth = auth;
+    window.initAuth = initAuth;
+    window.getUserId = getUserId;
+    window.collection = collection;
+    window.getDocs = getDocs;
+    window.doc = doc;
+    window.getDoc = getDoc;
+
+    function log(message, className = '') {
+      const output = document.getElementById('output');
+      const div = document.createElement('div');
+      div.className = className;
+      div.innerHTML = `<pre>${message}</pre>`;
+      output.appendChild(div);
+      console.log(message);
+    }
+
+    window.clearOutput = function() {
+      document.getElementById('output').innerHTML = '';
+    };
+
+    window.testConnection = async function() {
+      log('=== Testing Firebase Connection ===');
+      try {
+        log('✓ Firebase imported successfully', 'success');
+        log('✓ Firestore DB object exists: ' + (db ? 'YES' : 'NO'), db ? 'success' : 'error');
+        log('✓ Auth object exists: ' + (auth ? 'YES' : 'NO'), auth ? 'success' : 'error');
+      } catch (error) {
+        log('✗ ERROR: ' + error.message, 'error');
+      }
+    };
+
+    window.testAuth = async function() {
+      log('=== Testing Authentication ===');
+      try {
+        log('Attempting anonymous sign-in...');
+        await initAuth();
+        const userId = getUserId();
+        log('✓ Authentication successful!', 'success');
+        log('✓ User ID: ' + userId, 'success');
+      } catch (error) {
+        log('✗ Authentication ERROR: ' + error.message, 'error');
+        log('✗ Error code: ' + error.code, 'error');
+      }
+    };
+
+    window.listAllData = async function() {
+      log('=== Listing All Firestore Data ===');
+      try {
+        await initAuth();
+        const userId = getUserId();
+        log('User ID: ' + userId);
+
+        // List all weeks
+        const weeksRef = collection(db, `users/${userId}/weeks`);
+        log(`Fetching: users/${userId}/weeks`);
+        const weeksSnap = await getDocs(weeksRef);
+
+        log(`Found ${weeksSnap.size} weeks`);
+
+        if (weeksSnap.empty) {
+          log('⚠ No data found in Firestore', 'error');
+          log('This could mean:');
+          log('1. No data has been saved yet');
+          log('2. Firestore rules are blocking reads');
+          log('3. Authentication is using a different user ID');
+          return;
+        }
+
+        for (const weekDoc of weeksSnap.docs) {
+          log(`\n--- Week: ${weekDoc.id} ---`, 'success');
+
+          const entriesRef = collection(db, `users/${userId}/weeks/${weekDoc.id}/entries`);
+          const entriesSnap = await getDocs(entriesRef);
+
+          log(`  Entries: ${entriesSnap.size}`);
+
+          entriesSnap.forEach(entryDoc => {
+            log(`  Entry ${entryDoc.id}:`);
+            log(JSON.stringify(entryDoc.data(), null, 2));
+          });
+        }
+
+        // Check settings
+        log('\n=== Checking Settings ===');
+        const settingsRef = doc(db, `users/${userId}/settings`, 'config');
+        const settingsSnap = await getDoc(settingsRef);
+
+        if (settingsSnap.exists()) {
+          log('✓ Settings found:', 'success');
+          log(JSON.stringify(settingsSnap.data(), null, 2));
+        } else {
+          log('⚠ No settings found');
+        }
+
+      } catch (error) {
+        log('✗ ERROR: ' + error.message, 'error');
+        log('✗ Error code: ' + (error.code || 'unknown'), 'error');
+        log('✗ Stack: ' + error.stack, 'error');
+      }
+    };
+
+    // Auto-run connection test on load
+    log('Page loaded. Click buttons to test...');
+  </script>
+</body>
+</html>

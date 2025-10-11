@@ -1,5 +1,12 @@
 // Main Application Logic
-import { db, initAuth, getUserId } from './firebase-config.js';
+import {
+  db,
+  signInWithGoogle,
+  signOutUser,
+  onAuthStateChange,
+  getUserId,
+  getCurrentUser
+} from './firebase-config.js';
 import {
   collection,
   doc,
@@ -41,6 +48,11 @@ const tableBodyEl = document.getElementById('tableBody');
 const totalHoursEl = document.getElementById('totalHours');
 const saveIndicatorEl = document.getElementById('saveIndicator');
 const loadingOverlayEl = document.getElementById('loadingOverlay');
+const loginOverlayEl = document.getElementById('loginOverlay');
+const googleSignInBtn = document.getElementById('googleSignInBtn');
+const signOutBtn = document.getElementById('signOutBtn');
+const userInfoEl = document.getElementById('userInfo');
+const userEmailEl = document.getElementById('userEmail');
 const prevWeekBtn = document.getElementById('prevWeekBtn');
 const nextWeekBtn = document.getElementById('nextWeekBtn');
 const exportWeekBtn = document.getElementById('exportWeekBtn');
@@ -61,20 +73,42 @@ async function init() {
     // Show loading overlay
     loadingOverlayEl.classList.remove('hidden');
 
-    // Initialize Firebase Auth
-    await initAuth();
+    // Setup auth state listener
+    onAuthStateChange(async (user) => {
+      if (user) {
+        // User is signed in
+        console.log('User signed in:', user.email);
 
-    // Load hourly rate settings
-    await loadHourlyRate();
+        // Hide login overlay
+        loginOverlayEl.classList.add('hidden');
 
-    // Load current week
-    await loadWeek(currentWeekStart);
+        // Show user info
+        userEmailEl.textContent = user.email;
+        userInfoEl.classList.remove('hidden');
+
+        // Load user data
+        await loadHourlyRate();
+        await loadWeek(currentWeekStart);
+
+        // Hide loading overlay
+        loadingOverlayEl.classList.add('hidden');
+      } else {
+        // User is signed out
+        console.log('User signed out');
+
+        // Hide loading overlay
+        loadingOverlayEl.classList.add('hidden');
+
+        // Show login overlay
+        loginOverlayEl.classList.remove('hidden');
+
+        // Hide user info
+        userInfoEl.classList.add('hidden');
+      }
+    });
 
     // Setup event listeners
     setupEventListeners();
-
-    // Hide loading overlay
-    loadingOverlayEl.classList.add('hidden');
   } catch (error) {
     console.error('Error initializing app:', error);
     loadingOverlayEl.innerHTML = `
@@ -89,6 +123,11 @@ async function init() {
 
 // Setup event listeners
 function setupEventListeners() {
+  // Authentication
+  googleSignInBtn.addEventListener('click', handleSignIn);
+  signOutBtn.addEventListener('click', handleSignOut);
+
+  // Navigation
   prevWeekBtn.addEventListener('click', () => {
     currentWeekStart = addWeeks(currentWeekStart, -1);
     loadWeek(currentWeekStart);
@@ -99,6 +138,7 @@ function setupEventListeners() {
     loadWeek(currentWeekStart);
   });
 
+  // Export
   exportWeekBtn.addEventListener('click', async () => {
     const entries = await loadWeekEntries(currentWeekStart);
     exportWeekCSV(entries, getMonday(currentWeekStart));
@@ -117,6 +157,35 @@ function setupEventListeners() {
 
   // Save hourly rate
   saveRateBtn.addEventListener('click', saveHourlyRate);
+}
+
+// Handle Google Sign-In
+async function handleSignIn() {
+  try {
+    loadingOverlayEl.classList.remove('hidden');
+    await signInWithGoogle();
+    // Auth state change listener will handle the rest
+  } catch (error) {
+    console.error('Error signing in:', error);
+    loadingOverlayEl.classList.add('hidden');
+    alert('Failed to sign in. Please try again.');
+  }
+}
+
+// Handle Sign-Out
+async function handleSignOut() {
+  try {
+    const confirmSignOut = confirm('Are you sure you want to sign out?');
+    if (!confirmSignOut) return;
+
+    loadingOverlayEl.classList.remove('hidden');
+    await signOutUser();
+    // Auth state change listener will handle the rest
+  } catch (error) {
+    console.error('Error signing out:', error);
+    loadingOverlayEl.classList.add('hidden');
+    alert('Failed to sign out. Please try again.');
+  }
 }
 
 // Load hourly rate from Firestore
@@ -232,7 +301,7 @@ async function loadWeekEntries(weekStart) {
         date: dateStr,
         weekday: getWeekdayName(date),
         hours: 0,
-        task: '',
+        coworker: '',
         notes: ''
       });
     }
