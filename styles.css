@@ -61,6 +61,123 @@ main {
   padding: 2rem;
 }
 
+/* Settings Section */
+.settings-section {
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-color);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.settings-header:hover {
+  background-color: #e2e8f0;
+}
+
+.settings-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.settings-content {
+  padding: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--surface-color);
+}
+
+.settings-content.hidden {
+  display: none;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.setting-item label {
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 120px;
+}
+
+.hourly-rate-input {
+  max-width: 150px;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.save-rate-btn {
+  padding: 0.5rem 1rem;
+  background-color: var(--success-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.save-rate-btn:hover {
+  background-color: #059669;
+}
+
+.save-rate-btn:active {
+  transform: scale(0.98);
+}
+
+.rate-save-indicator {
+  color: var(--success-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.rate-save-indicator.hidden {
+  display: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.settings-note {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
 /* Week Navigation */
 .week-navigation {
   display: flex;
@@ -193,6 +310,11 @@ td.day-cell {
   font-weight: 500;
 }
 
+td.total-cell {
+  font-weight: 600;
+  color: var(--success-color);
+}
+
 /* Editable Inputs */
 input[type="number"],
 input[type="text"],
@@ -236,6 +358,11 @@ textarea {
 
 #totalHours {
   color: var(--primary-color);
+  font-size: 1.1rem;
+}
+
+#totalEarnings {
+  color: var(--success-color);
   font-size: 1.1rem;
 }
 

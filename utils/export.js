@@ -9,7 +9,7 @@ import { formatDate, getWeekdayName } from './date.js';
  */
 function entriesToCSV(entries) {
   // CSV headers
-  const headers = ['Date', 'Weekday', 'Hours', 'Task', 'Notes'];
+  const headers = ['Date', 'Weekday', 'Hours', 'Coworker', 'Notes', 'Hourly Rate', 'Total Earnings'];
 
   // Sort entries by date
   const sortedEntries = entries.sort((a, b) =>
@@ -17,13 +17,21 @@ function entriesToCSV(entries) {
   );
 
   // Convert entries to CSV rows
-  const rows = sortedEntries.map(entry => [
-    entry.date,
-    entry.weekday,
-    entry.hours || 0,
-    entry.task || '',
-    entry.notes || ''
-  ]);
+  const rows = sortedEntries.map(entry => {
+    const hours = entry.hours || 0;
+    const rate = entry.hourlyRate || 0;
+    const total = hours * rate;
+
+    return [
+      entry.date,
+      entry.weekday,
+      hours,
+      entry.coworker || '',
+      entry.notes || '',
+      rate,
+      total.toFixed(2)
+    ];
+  });
 
   // Escape CSV values (handle commas and quotes)
   const escapeCSV = (value) => {
@@ -34,10 +42,20 @@ function entriesToCSV(entries) {
     return stringValue;
   };
 
+  // Calculate totals
+  const totalHours = sortedEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+  const totalEarnings = sortedEntries.reduce((sum, entry) => {
+    const hours = entry.hours || 0;
+    const rate = entry.hourlyRate || 0;
+    return sum + (hours * rate);
+  }, 0);
+
   // Build CSV content
   const csvLines = [
     headers.join(','),
-    ...rows.map(row => row.map(escapeCSV).join(','))
+    ...rows.map(row => row.map(escapeCSV).join(',')),
+    '', // Empty line
+    `TOTALS,,${totalHours},,,,$${totalEarnings.toFixed(2)}`
   ];
 
   return csvLines.join('\n');
