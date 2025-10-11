@@ -49,7 +49,6 @@ const summaryTotalEl = document.getElementById('summaryTotal');
 const summaryDaysEl = document.getElementById('summaryDays');
 const summaryAverageEl = document.getElementById('summaryAverage');
 const summaryEarningsEl = document.getElementById('summaryEarnings');
-const totalEarningsEl = document.getElementById('totalEarnings');
 const hourlyRateInputEl = document.getElementById('hourlyRateInput');
 const saveRateBtn = document.getElementById('saveRateBtn');
 const rateSaveIndicatorEl = document.getElementById('rateSaveIndicator');
@@ -281,11 +280,6 @@ function renderTable(dates, entries) {
       row.classList.add('today');
     }
 
-    // Calculate daily earnings
-    const hours = parseFloat(entry.hours) || 0;
-    const rate = entry.hourlyRate || 0;
-    const dailyTotal = hours * rate;
-
     row.innerHTML = `
       <td class="date-cell">${formatDateDisplay(date)}</td>
       <td class="day-cell">${getWeekdayName(date)}</td>
@@ -318,7 +312,6 @@ function renderTable(dates, entries) {
           rows="1"
         >${entry.notes || ''}</textarea>
       </td>
-      <td class="total-cell">$${dailyTotal.toFixed(2)}</td>
     `;
 
     // Add event listeners for auto-save
@@ -419,17 +412,10 @@ function showSaveIndicator() {
   }, 2000);
 }
 
-// Update total hours and earnings display
+// Update total hours display
 function updateTotalHours(entries) {
   const totalHours = entries.reduce((sum, entry) => sum + (parseFloat(entry.hours) || 0), 0);
-  const totalEarnings = entries.reduce((sum, entry) => {
-    const hours = parseFloat(entry.hours) || 0;
-    const rate = entry.hourlyRate || 0;
-    return sum + (hours * rate);
-  }, 0);
-
   totalHoursEl.textContent = totalHours.toFixed(1);
-  totalEarningsEl.textContent = `$${totalEarnings.toFixed(2)}`;
 }
 
 // Update summary statistics
