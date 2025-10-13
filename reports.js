@@ -38,7 +38,8 @@ import {
 
 import {
   formatDate,
-  getWeekId
+  getWeekId,
+  parseLocalDate
 } from './utils/date.js';
 
 import {
@@ -218,47 +219,47 @@ async function loadReport(periodType, periodDate) {
     // Update period display
     updatePeriodDisplay(periodType, start, end);
 
-    // Load current period rollup
-    const rollupRef = doc(db, `users/${userId}/earnings-rollups`, `${periodType}-${periodId}`);
-    const rollupSnap = await getDoc(rollupRef);
+    // Always load fresh entries and regenerate rollup to ensure data is current
+    console.log(`Loading fresh entries for ${periodType} ${periodId}...`);
+    const entries = await loadEntriesForPeriod(userId, start, end);
 
-    if (rollupSnap.exists()) {
-      currentRollup = rollupSnap.data();
+    if (entries.length > 0) {
+      // Generate rollup from entries
+      currentRollup = calculateRollup(entries, start, end);
+      console.log(`Generated rollup for ${periodType} ${periodId} with ${entries.length} entries`);
+
+      // Save the updated rollup for future reference
+      const rollupRef = doc(db, `users/${userId}/earnings-rollups`, `${periodType}-${periodId}`);
+      await setDoc(rollupRef, currentRollup);
     } else {
-      // No rollup data found - try to generate it from existing entries
-      console.log(`No rollup data found for ${periodType} ${periodId}, attempting to generate from entries...`);
-
-      const entries = await loadEntriesForPeriod(userId, start, end);
-
-      if (entries.length > 0) {
-        // Generate rollup from entries
-        currentRollup = calculateRollup(entries, start, end);
-
-        // Save the generated rollup
-        await setDoc(rollupRef, currentRollup);
-        console.log(`Generated and saved rollup for ${periodType} ${periodId} with ${entries.length} entries`);
-      } else {
-        // No entries for this period
-        currentRollup = {
-          periodStart: start.toISOString().split('T')[0],
-          periodEnd: end.toISOString().split('T')[0],
-          totalHours: 0,
-          totalEarnings: 0,
-          daysWorked: 0,
-          averageHoursPerDay: 0,
-          entries: []
-        };
-      }
+      // No entries for this period
+      console.log(`No entries found for ${periodType} ${periodId}`);
+      currentRollup = {
+        periodStart: start.toISOString().split('T')[0],
+        periodEnd: end.toISOString().split('T')[0],
+        totalHours: 0,
+        totalEarnings: 0,
+        daysWorked: 0,
+        averageHoursPerDay: 0,
+        entries: []
+      };
     }
 
-    // Load previous period rollup for comparison
+    // Load previous period rollup for comparison - also regenerate from fresh data
     const prevPeriodDate = navigatePeriod(periodType, periodDate, -1);
     const prevPeriodId = getPeriodId(periodType, prevPeriodDate);
-    const prevRollupRef = doc(db, `users/${userId}/earnings-rollups`, `${periodType}-${prevPeriodId}`);
-    const prevRollupSnap = await getDoc(prevRollupRef);
+    const { start: prevStart, end: prevEnd } = getPeriodDates(periodType, prevPeriodDate);
 
-    if (prevRollupSnap.exists()) {
-      previousRollup = prevRollupSnap.data();
+    console.log(`Loading fresh entries for previous ${periodType} ${prevPeriodId}...`);
+    const prevEntries = await loadEntriesForPeriod(userId, prevStart, prevEnd);
+
+    if (prevEntries.length > 0) {
+      previousRollup = calculateRollup(prevEntries, prevStart, prevEnd);
+      console.log(`Generated previous rollup for ${periodType} ${prevPeriodId} with ${prevEntries.length} entries`);
+
+      // Save the updated previous rollup
+      const prevRollupRef = doc(db, `users/${userId}/earnings-rollups`, `${periodType}-${prevPeriodId}`);
+      await setDoc(prevRollupRef, previousRollup);
     } else {
       previousRollup = null;
     }
@@ -369,7 +370,7 @@ function updateBreakdownTable(rollup) {
 
   // Sort entries by date
   const sortedEntries = [...rollup.entries].sort((a, b) =>
-    new Date(a.date) - new Date(b.date)
+    parseLocalDate(a.date) - parseLocalDate(b.date)
   );
 
   sortedEntries.forEach(entry => {
@@ -379,7 +380,7 @@ function updateBreakdownTable(rollup) {
 
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td class="date-cell">${formatDateDisplay(new Date(entry.date))}</td>
+      <td class="date-cell">${formatDateDisplay(parseLocalDate(entry.date))}</td>
       <td class="day-cell">${entry.weekday}</td>
       <td>${hours.toFixed(1)}</td>
       <td>$${rate.toFixed(2)}</td>
@@ -440,13 +441,27 @@ function updateCharts(rollup, periodType) {
 async function loadEntriesForPeriod(userId, startDate, endDate) {
   const allEntries = [];
 
+  // Normalize dates to midnight to avoid time comparison issues
+  const normalizeDate = (d) => {
+    const normalized = new Date(d);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  };
+
+  const start = normalizeDate(startDate);
+  const end = normalizeDate(endDate);
+
+  console.log(`Loading entries from ${formatDate(start)} to ${formatDate(end)}`);
+
   // Get all dates in the range
   const dates = [];
-  const current = new Date(startDate);
-  while (current <= endDate) {
+  const current = new Date(start);
+  while (current <= end) {
     dates.push(new Date(current));
     current.setDate(current.getDate() + 1);
   }
+
+  console.log(`Generated ${dates.length} dates to check:`, dates.map(d => formatDate(d)));
 
   // Load entries for each date
   for (const date of dates) {
@@ -458,16 +473,23 @@ async function loadEntriesForPeriod(userId, startDate, endDate) {
       const entrySnap = await getDoc(entryRef);
       if (entrySnap.exists()) {
         const entryData = entrySnap.data();
+        console.log(`Found entry for ${dateStr}:`, entryData);
         // Only include entries with hours > 0
         if (entryData.hours && parseFloat(entryData.hours) > 0) {
           allEntries.push(entryData);
+          console.log(`✓ Included entry for ${dateStr} with ${entryData.hours} hours`);
+        } else {
+          console.log(`✗ Skipped entry for ${dateStr} (hours: ${entryData.hours})`);
         }
+      } else {
+        console.log(`No entry found for ${dateStr}`);
       }
     } catch (error) {
       console.error(`Error loading entry for ${dateStr}:`, error);
     }
   }
 
+  console.log(`Total entries loaded: ${allEntries.length}`);
   return allEntries;
 }
 

@@ -1,5 +1,7 @@
 // Chart.js wrapper utilities for earnings reports
 
+import { parseLocalDate } from './date.js';
+
 /**
  * Create a bar chart for hours worked
  * @param {HTMLCanvasElement} canvas - The canvas element
@@ -300,10 +302,10 @@ export function destroyChart(chart) {
 export function formatChartLabels(dataPoints, labelField) {
   return dataPoints.map(point => {
     if (labelField === 'date') {
-      const date = new Date(point.date);
+      const date = parseLocalDate(point.date);
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     } else if (labelField === 'weekId') {
-      const date = new Date(point.weekId);
+      const date = parseLocalDate(point.weekId);
       return `Week of ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     } else if (labelField === 'monthId') {
       const [year, month] = point.monthId.split('-');

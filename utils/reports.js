@@ -11,7 +11,8 @@ import {
   getMonthDates,
   getYearDates,
   getDateRange,
-  getMonday
+  getMonday,
+  parseLocalDate
 } from './date.js';
 
 /**
@@ -22,10 +23,22 @@ import {
  * @returns {Object} - Rollup data
  */
 export function calculateRollup(entries, periodStart, periodEnd) {
+  // Normalize dates to midnight for accurate comparison
+  const normalizeDate = (d) => {
+    const normalized = new Date(d);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  };
+
+  const start = normalizeDate(periodStart);
+  const end = normalizeDate(periodEnd);
+
   // Filter entries within the period
   const periodEntries = entries.filter(entry => {
-    const entryDate = new Date(entry.date);
-    return entryDate >= periodStart && entryDate <= periodEnd;
+    const entryDate = parseLocalDate(entry.date);
+    const isInRange = entryDate >= start && entryDate <= end;
+    console.log(`Filtering ${entry.date}: entryDate=${entryDate.toISOString()}, start=${start.toISOString()}, end=${end.toISOString()}, inRange=${isInRange}`);
+    return isInRange;
   });
 
   // Calculate totals
@@ -185,7 +198,7 @@ export function aggregateByDay(entries) {
   });
 
   // Convert to array and sort by date
-  return Object.values(dayMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+  return Object.values(dayMap).sort((a, b) => parseLocalDate(a.date) - parseLocalDate(b.date));
 }
 
 /**
@@ -197,7 +210,7 @@ export function aggregateByWeek(entries) {
   const weekMap = {};
 
   entries.forEach(entry => {
-    const entryDate = new Date(entry.date);
+    const entryDate = parseLocalDate(entry.date);
     const weekId = getWeekId(entryDate);
 
     if (!weekMap[weekId]) {
@@ -225,7 +238,7 @@ export function aggregateByMonth(entries) {
   const monthMap = {};
 
   entries.forEach(entry => {
-    const entryDate = new Date(entry.date);
+    const entryDate = parseLocalDate(entry.date);
     const monthId = getMonthId(entryDate);
 
     if (!monthMap[monthId]) {

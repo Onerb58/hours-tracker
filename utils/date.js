@@ -55,6 +55,17 @@ export function formatDate(date) {
 }
 
 /**
+ * Parse a date string (YYYY-MM-DD) as a local date, not UTC
+ * This prevents timezone bugs when converting date strings to Date objects
+ * @param {string} dateStr - Date string in YYYY-MM-DD format
+ * @returns {Date} - Date object in local timezone
+ */
+export function parseLocalDate(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
  * Format a date as a readable string (e.g., "Mon, Oct 7")
  * @param {Date} date - The date to format
  * @returns {string} - Formatted date string

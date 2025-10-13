@@ -1,6 +1,6 @@
 // CSV Export utilities
 
-import { formatDate, getWeekdayName } from './date.js';
+import { formatDate, getWeekdayName, parseLocalDate } from './date.js';
 
 /**
  * Convert entries to CSV format
@@ -13,7 +13,7 @@ function entriesToCSV(entries) {
 
   // Sort entries by date
   const sortedEntries = entries.sort((a, b) =>
-    new Date(a.date) - new Date(b.date)
+    parseLocalDate(a.date) - parseLocalDate(b.date)
   );
 
   // Convert entries to CSV rows
@@ -150,7 +150,7 @@ export function exportReportCSV(rollup, comparison, periodType, periodId) {
 
   // Sort entries by date
   const sortedEntries = rollup.entries.sort((a, b) =>
-    new Date(a.date) - new Date(b.date)
+    parseLocalDate(a.date) - parseLocalDate(b.date)
   );
 
   // Convert entries to CSV rows
