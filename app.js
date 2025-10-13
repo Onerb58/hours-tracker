@@ -39,7 +39,8 @@ import {
 import {
   calculateRollup,
   getAffectedPeriodIds,
-  getPeriodDates
+  getPeriodDates,
+  calculateWeeklyEarningsWithOvertime
 } from './utils/reports.js';
 
 // Application State
@@ -64,9 +65,12 @@ const nextWeekBtn = document.getElementById('nextWeekBtn');
 const exportWeekBtn = document.getElementById('exportWeekBtn');
 const exportAllBtn = document.getElementById('exportAllBtn');
 const summaryTotalEl = document.getElementById('summaryTotal');
+const summaryRegularHoursEl = document.getElementById('summaryRegularHours');
+const summaryOvertimeHoursEl = document.getElementById('summaryOvertimeHours');
 const summaryDaysEl = document.getElementById('summaryDays');
 const summaryAverageEl = document.getElementById('summaryAverage');
 const summaryEarningsEl = document.getElementById('summaryEarnings');
+const summaryOvertimeEarningsEl = document.getElementById('summaryOvertimeEarnings');
 const hourlyRateInputEl = document.getElementById('hourlyRateInput');
 const saveRateBtn = document.getElementById('saveRateBtn');
 const rateSaveIndicatorEl = document.getElementById('rateSaveIndicator');
@@ -560,16 +564,17 @@ function updateTotalHours(entries) {
 // Update summary statistics
 function updateSummary(entries) {
   const summary = generateSummary(entries);
-  const totalEarnings = entries.reduce((sum, entry) => {
-    const hours = parseFloat(entry.hours) || 0;
-    const rate = entry.hourlyRate || 0;
-    return sum + (hours * rate);
-  }, 0);
+
+  // Calculate overtime using the weekly overtime calculation
+  const overtimeCalc = calculateWeeklyEarningsWithOvertime(entries);
 
   summaryTotalEl.textContent = summary.totalHours;
+  summaryRegularHoursEl.textContent = overtimeCalc.regularHours.toFixed(1);
+  summaryOvertimeHoursEl.textContent = overtimeCalc.overtimeHours.toFixed(1);
   summaryDaysEl.textContent = summary.daysWorked;
   summaryAverageEl.textContent = summary.averageHours;
-  summaryEarningsEl.textContent = `$${totalEarnings.toFixed(2)}`;
+  summaryEarningsEl.textContent = `$${overtimeCalc.totalEarnings.toFixed(2)}`;
+  summaryOvertimeEarningsEl.textContent = `$${overtimeCalc.overtimeEarnings.toFixed(2)}`;
 }
 
 // Start the app

@@ -337,7 +337,7 @@ textarea:focus {
 }
 
 input[type="number"] {
-  max-width: 80px;
+  max-width: 120px;
 }
 
 textarea {
@@ -375,10 +375,19 @@ textarea {
   padding: 1.5rem;
   background-color: var(--bg-color);
   border-radius: 8px;
+  flex-wrap: wrap;
 }
 
 .stat {
   text-align: center;
+  min-width: 120px;
+}
+
+.stat.overtime {
+  background-color: rgba(249, 115, 22, 0.1);
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(249, 115, 22, 0.2);
 }
 
 .stat-label {
@@ -393,6 +402,14 @@ textarea {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--primary-color);
+}
+
+.stat.overtime .stat-value {
+  color: #f97316;
+}
+
+.stat-value.earnings {
+  color: var(--success-color);
 }
 
 /* Action Buttons */
