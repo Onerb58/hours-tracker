@@ -137,3 +137,72 @@ export function generateSummary(entries) {
     averageHours
   };
 }
+
+/**
+ * Export earnings report for a specific period with comparison data
+ * @param {Object} rollup - Current period rollup data
+ * @param {Object} comparison - Comparison data vs previous period
+ * @param {string} periodType - Period type ('weekly', 'biweekly', 'monthly', 'yearly')
+ * @param {string} periodId - Period identifier
+ */
+export function exportReportCSV(rollup, comparison, periodType, periodId) {
+  const headers = ['Date', 'Weekday', 'Hours', 'Hourly Rate', 'Earnings', 'Coworker', 'Notes'];
+
+  // Sort entries by date
+  const sortedEntries = rollup.entries.sort((a, b) =>
+    new Date(a.date) - new Date(b.date)
+  );
+
+  // Convert entries to CSV rows
+  const rows = sortedEntries.map(entry => {
+    const hours = entry.hours || 0;
+    const rate = entry.hourlyRate || 0;
+    const earnings = hours * rate;
+
+    return [
+      entry.date,
+      entry.weekday,
+      hours,
+      rate.toFixed(2),
+      earnings.toFixed(2),
+      entry.coworker || '',
+      entry.notes || ''
+    ];
+  });
+
+  // Escape CSV values (handle commas and quotes)
+  const escapeCSV = (value) => {
+    const stringValue = String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  // Build CSV content with summary header
+  const csvLines = [
+    `EARNINGS REPORT - ${periodType.toUpperCase()}`,
+    `Period: ${rollup.periodStart} to ${rollup.periodEnd}`,
+    '',
+    '=== SUMMARY ===',
+    `Total Hours,${rollup.totalHours}`,
+    `Total Earnings,$${rollup.totalEarnings.toFixed(2)}`,
+    `Days Worked,${rollup.daysWorked}`,
+    `Average Hours/Day,${rollup.averageHoursPerDay.toFixed(2)}`,
+    '',
+    '=== COMPARISON VS PREVIOUS PERIOD ===',
+    `Hours Change,${comparison.hoursChange >= 0 ? '+' : ''}${comparison.hoursChange} (${comparison.hoursChangePercent >= 0 ? '+' : ''}${comparison.hoursChangePercent}%)`,
+    `Earnings Change,${comparison.earningsChange >= 0 ? '+$' : '-$'}${Math.abs(comparison.earningsChange).toFixed(2)} (${comparison.earningsChangePercent >= 0 ? '+' : ''}${comparison.earningsChangePercent}%)`,
+    `Days Worked Change,${comparison.daysWorkedChange >= 0 ? '+' : ''}${comparison.daysWorkedChange}`,
+    '',
+    '=== DETAILED ENTRIES ===',
+    headers.join(','),
+    ...rows.map(row => row.map(escapeCSV).join(','))
+  ];
+
+  // Create filename
+  const filename = `earnings-report-${periodType}-${periodId}.csv`;
+
+  // Download CSV
+  downloadCSV(csvLines.join('\n'), filename);
+}

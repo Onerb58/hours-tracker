@@ -36,6 +36,12 @@ import {
   generateSummary
 } from './utils/export.js';
 
+import {
+  calculateRollup,
+  getAffectedPeriodIds,
+  getPeriodDates
+} from './utils/reports.js';
+
 // Application State
 let currentWeekStart = new Date();
 let weekEntries = [];
@@ -458,6 +464,9 @@ async function saveEntry(date, field, value) {
     // Save to Firestore
     await setDoc(entryRef, updatedData);
 
+    // Update earnings rollups for all affected periods
+    await updateEarningsRollups(new Date(date));
+
     // Show save indicator
     showSaveIndicator();
 
@@ -470,6 +479,68 @@ async function saveEntry(date, field, value) {
   } catch (error) {
     console.error('Error saving entry:', error);
   }
+}
+
+// Update earnings rollups for all affected periods
+async function updateEarningsRollups(entryDate) {
+  try {
+    const userId = getUserId();
+    const periodIds = getAffectedPeriodIds(entryDate);
+
+    // Update each period type
+    const periodTypes = ['weekly', 'biweekly', 'monthly', 'yearly'];
+
+    for (const periodType of periodTypes) {
+      const periodId = periodIds[periodType];
+      const { start, end } = getPeriodDates(periodType, entryDate);
+
+      // Load all entries for this period
+      const entries = await loadEntriesForPeriod(start, end);
+
+      // Calculate rollup
+      const rollup = calculateRollup(entries, start, end);
+
+      // Save rollup to Firestore with combined ID
+      const rollupRef = doc(db, `users/${userId}/earnings-rollups`, `${periodType}-${periodId}`);
+      await setDoc(rollupRef, rollup);
+
+      console.log(`Updated ${periodType} rollup for ${periodId}`);
+    }
+  } catch (error) {
+    console.error('Error updating earnings rollups:', error);
+  }
+}
+
+// Load entries for a specific date range
+async function loadEntriesForPeriod(startDate, endDate) {
+  const userId = getUserId();
+  const allEntries = [];
+
+  // Get all dates in the range
+  const dates = [];
+  const current = new Date(startDate);
+  while (current <= endDate) {
+    dates.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Load entries for each date
+  for (const date of dates) {
+    const weekId = getWeekId(date);
+    const dateStr = formatDate(date);
+    const entryRef = doc(db, `users/${userId}/weeks/${weekId}/entries`, dateStr);
+
+    try {
+      const entrySnap = await getDoc(entryRef);
+      if (entrySnap.exists()) {
+        allEntries.push(entrySnap.data());
+      }
+    } catch (error) {
+      console.error(`Error loading entry for ${dateStr}:`, error);
+    }
+  }
+
+  return allEntries;
 }
 
 // Show save indicator
