@@ -1,4 +1,4 @@
-# Work Hours Tracker
+# Work Hours Tracker 2.0
 
 A lightweight, cloud-synced work hours tracker built with Vanilla JavaScript and Firebase.
 
