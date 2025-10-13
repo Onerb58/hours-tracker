@@ -357,7 +357,6 @@ function renderTable(dates, entries) {
 
     row.innerHTML = `
       <td class="date-cell">${formatDateDisplay(date)}</td>
-      <td class="day-cell">${getWeekdayName(date)}</td>
       <td>
         <input
           type="number"
