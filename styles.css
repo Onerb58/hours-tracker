@@ -232,6 +232,63 @@ main {
   animation: slideIn 0.3s ease-out;
 }
 
+/* Weekly Time Off Section */
+.weekly-time-off {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.weekly-time-off h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+}
+
+.time-off-inputs {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.time-off-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.time-off-field label {
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 100px;
+}
+
+.time-off-input {
+  width: 100px;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.time-off-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.time-off-note {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
 .save-indicator.hidden {
   display: none;
 }
@@ -390,6 +447,20 @@ textarea {
   border: 1px solid rgba(249, 115, 22, 0.2);
 }
 
+.stat.pto {
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.stat.holiday {
+  background-color: rgba(16, 185, 129, 0.1);
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
 .stat-label {
   display: block;
   font-size: 0.85rem;
@@ -406,6 +477,14 @@ textarea {
 
 .stat.overtime .stat-value {
   color: #f97316;
+}
+
+.stat.pto .stat-value {
+  color: #3b82f6;
+}
+
+.stat.holiday .stat-value {
+  color: #10b981;
 }
 
 .stat-value.earnings {

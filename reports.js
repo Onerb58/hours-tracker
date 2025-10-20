@@ -77,10 +77,16 @@ const exportReportBtn = document.getElementById('exportReportBtn');
 
 // Summary cards
 const cardTotalHours = document.getElementById('cardTotalHours');
+const cardPTOHours = document.getElementById('cardPTOHours');
+const cardHolidayHours = document.getElementById('cardHolidayHours');
+const cardTotalPaidHours = document.getElementById('cardTotalPaidHours');
 const cardTotalEarnings = document.getElementById('cardTotalEarnings');
 const cardDaysWorked = document.getElementById('cardDaysWorked');
 const cardAvgHours = document.getElementById('cardAvgHours');
 const cardHoursComparison = document.getElementById('cardHoursComparison');
+const cardPTOComparison = document.getElementById('cardPTOComparison');
+const cardHolidayComparison = document.getElementById('cardHolidayComparison');
+const cardTotalPaidComparison = document.getElementById('cardTotalPaidComparison');
 const cardEarningsComparison = document.getElementById('cardEarningsComparison');
 const cardDaysComparison = document.getElementById('cardDaysComparison');
 const cardAvgComparison = document.getElementById('cardAvgComparison');
@@ -223,9 +229,12 @@ async function loadReport(periodType, periodDate) {
     console.log(`Loading fresh entries for ${periodType} ${periodId}...`);
     const entries = await loadEntriesForPeriod(userId, start, end);
 
-    if (entries.length > 0) {
-      // Generate rollup from entries
-      currentRollup = calculateRollup(entries, start, end);
+    // Load weekly PTO/Holiday data
+    const weeklyTimeOff = await loadWeeklyTimeOffForPeriod(userId, start, end);
+
+    if (entries.length > 0 || Object.keys(weeklyTimeOff).some(weekId => weeklyTimeOff[weekId].ptoHours > 0 || weeklyTimeOff[weekId].holidayHours > 0)) {
+      // Generate rollup from entries with PTO/Holiday data
+      currentRollup = calculateRollup(entries, start, end, weeklyTimeOff);
       console.log(`Generated rollup for ${periodType} ${periodId} with ${entries.length} entries`);
 
       // Save the updated rollup for future reference
@@ -238,6 +247,9 @@ async function loadReport(periodType, periodDate) {
         periodStart: start.toISOString().split('T')[0],
         periodEnd: end.toISOString().split('T')[0],
         totalHours: 0,
+        ptoHours: 0,
+        holidayHours: 0,
+        totalPaidHours: 0,
         totalEarnings: 0,
         daysWorked: 0,
         averageHoursPerDay: 0,
@@ -253,8 +265,11 @@ async function loadReport(periodType, periodDate) {
     console.log(`Loading fresh entries for previous ${periodType} ${prevPeriodId}...`);
     const prevEntries = await loadEntriesForPeriod(userId, prevStart, prevEnd);
 
-    if (prevEntries.length > 0) {
-      previousRollup = calculateRollup(prevEntries, prevStart, prevEnd);
+    // Load weekly PTO/Holiday data for previous period
+    const prevWeeklyTimeOff = await loadWeeklyTimeOffForPeriod(userId, prevStart, prevEnd);
+
+    if (prevEntries.length > 0 || Object.keys(prevWeeklyTimeOff).some(weekId => prevWeeklyTimeOff[weekId].ptoHours > 0 || prevWeeklyTimeOff[weekId].holidayHours > 0)) {
+      previousRollup = calculateRollup(prevEntries, prevStart, prevEnd, prevWeeklyTimeOff);
       console.log(`Generated previous rollup for ${periodType} ${prevPeriodId} with ${prevEntries.length} entries`);
 
       // Save the updated previous rollup
@@ -310,12 +325,18 @@ function updatePeriodDisplay(periodType, start, end) {
 function updateSummaryCards(rollup, comparison) {
   // Update values
   cardTotalHours.textContent = rollup.totalHours.toFixed(1);
+  cardPTOHours.textContent = (rollup.ptoHours || 0).toFixed(1);
+  cardHolidayHours.textContent = (rollup.holidayHours || 0).toFixed(1);
+  cardTotalPaidHours.textContent = (rollup.totalPaidHours || rollup.totalHours).toFixed(1);
   cardTotalEarnings.textContent = `$${rollup.totalEarnings.toFixed(2)}`;
   cardDaysWorked.textContent = rollup.daysWorked;
   cardAvgHours.textContent = rollup.averageHoursPerDay.toFixed(2);
 
   // Update comparisons
   updateComparisonElement(cardHoursComparison, comparison.hoursChange, comparison.hoursChangePercent);
+  updateComparisonElement(cardPTOComparison, comparison.ptoChange || 0, null);
+  updateComparisonElement(cardHolidayComparison, comparison.holidayChange || 0, null);
+  updateComparisonElement(cardTotalPaidComparison, comparison.totalPaidChange || 0, comparison.totalPaidChangePercent || 0);
   updateComparisonElement(cardEarningsComparison, comparison.earningsChange, comparison.earningsChangePercent, true);
   updateComparisonElement(cardDaysComparison, comparison.daysWorkedChange, null);
   updateComparisonElement(cardAvgComparison, comparison.averageHoursChange, null);
@@ -491,6 +512,53 @@ async function loadEntriesForPeriod(userId, startDate, endDate) {
 
   console.log(`Total entries loaded: ${allEntries.length}`);
   return allEntries;
+}
+
+// Load weekly PTO/Holiday data for all weeks in a date range
+async function loadWeeklyTimeOffForPeriod(userId, startDate, endDate) {
+  const weeklyTimeOff = {};
+
+  // Get all unique weeks in the date range
+  const dates = [];
+  const current = new Date(startDate);
+  current.setHours(0, 0, 0, 0);
+
+  const end = new Date(endDate);
+  end.setHours(0, 0, 0, 0);
+
+  while (current <= end) {
+    dates.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Get unique week IDs
+  const weekIds = [...new Set(dates.map(d => getWeekId(d)))];
+  console.log(`Loading PTO/Holiday for ${weekIds.length} weeks:`, weekIds);
+
+  // Load PTO/Holiday for each week
+  for (const weekId of weekIds) {
+    const weekRef = doc(db, `users/${userId}/weeks/${weekId}/meta`, 'timeOff');
+
+    try {
+      const weekSnap = await getDoc(weekRef);
+      if (weekSnap.exists()) {
+        const data = weekSnap.data();
+        weeklyTimeOff[weekId] = {
+          ptoHours: parseFloat(data.ptoHours) || 0,
+          holidayHours: parseFloat(data.holidayHours) || 0
+        };
+        console.log(`✓ Loaded PTO/Holiday for week ${weekId}:`, weeklyTimeOff[weekId]);
+      } else {
+        weeklyTimeOff[weekId] = { ptoHours: 0, holidayHours: 0 };
+        console.log(`✗ No PTO/Holiday data for week ${weekId}`);
+      }
+    } catch (error) {
+      console.error(`Error loading PTO/Holiday for week ${weekId}:`, error);
+      weeklyTimeOff[weekId] = { ptoHours: 0, holidayHours: 0 };
+    }
+  }
+
+  return weeklyTimeOff;
 }
 
 // Handle export report

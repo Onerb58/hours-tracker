@@ -60,6 +60,38 @@
         <span class="checkmark">✓</span> Saved
       </div>
 
+      <!-- Weekly PTO/Holiday Entry -->
+      <div class="weekly-time-off">
+        <h3>Paid Time Off for This Week</h3>
+        <div class="time-off-inputs">
+          <div class="time-off-field">
+            <label for="weeklyPTO">PTO Hours:</label>
+            <input
+              type="number"
+              id="weeklyPTO"
+              min="0"
+              max="168"
+              step="0.5"
+              value="0"
+              class="time-off-input"
+            />
+          </div>
+          <div class="time-off-field">
+            <label for="weeklyHoliday">Holiday Hours:</label>
+            <input
+              type="number"
+              id="weeklyHoliday"
+              min="0"
+              max="168"
+              step="0.5"
+              value="0"
+              class="time-off-input"
+            />
+          </div>
+        </div>
+        <p class="time-off-note">Note: PTO and Holiday hours are paid at regular rate and don't count toward overtime.</p>
+      </div>
+
       <!-- Hours Table -->
       <div class="table-container">
         <table id="hoursTable">
@@ -87,7 +119,19 @@
       <!-- Summary Stats -->
       <div class="summary">
         <div class="stat">
-          <span class="stat-label">Total Hours:</span>
+          <span class="stat-label">Work Hours:</span>
+          <span class="stat-value" id="summaryWorkHours">0</span>
+        </div>
+        <div class="stat pto">
+          <span class="stat-label">PTO Hours:</span>
+          <span class="stat-value" id="summaryPTOHours">0</span>
+        </div>
+        <div class="stat holiday">
+          <span class="stat-label">Holiday Hours:</span>
+          <span class="stat-value" id="summaryHolidayHours">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Total Paid Hours:</span>
           <span class="stat-value" id="summaryTotal">0</span>
         </div>
         <div class="stat">

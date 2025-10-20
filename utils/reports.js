@@ -17,15 +17,22 @@ import {
 
 /**
  * Calculate earnings with overtime for a week of entries
- * Overtime rate is 1.5x after 40 hours per week
+ * Overtime rate is 1.5x after 40 hours per week (based on work hours only)
+ * PTO and Holiday hours are paid at regular rate and don't count toward overtime threshold
  * @param {Array<Object>} weekEntries - Array of entry objects for a single week
- * @returns {Object} - {regularHours, overtimeHours, regularEarnings, overtimeEarnings, totalEarnings}
+ * @param {number} weeklyPTO - PTO hours for the week (default 0)
+ * @param {number} weeklyHoliday - Holiday hours for the week (default 0)
+ * @returns {Object} - {workHours, ptoHours, holidayHours, regularHours, overtimeHours, regularEarnings, overtimeEarnings, totalEarnings}
  */
-export function calculateWeeklyEarningsWithOvertime(weekEntries) {
-  // Calculate total hours for the week
-  const totalHours = weekEntries.reduce((sum, entry) => {
+export function calculateWeeklyEarningsWithOvertime(weekEntries, weeklyPTO = 0, weeklyHoliday = 0) {
+  // Calculate work hours (for overtime threshold)
+  const workHours = weekEntries.reduce((sum, entry) => {
     return sum + (parseFloat(entry.hours) || 0);
   }, 0);
+
+  // Use provided weekly PTO and Holiday values
+  const ptoHours = parseFloat(weeklyPTO) || 0;
+  const holidayHours = parseFloat(weeklyHoliday) || 0;
 
   // Get the hourly rate (assume all entries in the week have the same rate, use the first non-zero one)
   const hourlyRate = weekEntries.find(e => e.hourlyRate)?.hourlyRate || 0;
@@ -35,24 +42,38 @@ export function calculateWeeklyEarningsWithOvertime(weekEntries) {
   let regularEarnings = 0;
   let overtimeEarnings = 0;
 
-  if (totalHours <= 40) {
+  // Calculate overtime based on work hours only (not including PTO/Holiday)
+  if (workHours <= 40) {
     // No overtime
-    regularHours = totalHours;
-    regularEarnings = totalHours * hourlyRate;
+    regularHours = workHours;
+    regularEarnings = workHours * hourlyRate;
   } else {
-    // Overtime applies
+    // Overtime applies to work hours beyond 40
     regularHours = 40;
-    overtimeHours = totalHours - 40;
+    overtimeHours = workHours - 40;
     regularEarnings = 40 * hourlyRate;
     overtimeEarnings = overtimeHours * hourlyRate * 1.5;
   }
 
+  // Add PTO and Holiday pay at regular rate
+  const ptoEarnings = ptoHours * hourlyRate;
+  const holidayEarnings = holidayHours * hourlyRate;
+
+  const totalHours = workHours + ptoHours + holidayHours;
+  const totalEarnings = regularEarnings + overtimeEarnings + ptoEarnings + holidayEarnings;
+
   return {
+    workHours: parseFloat(workHours.toFixed(2)),
+    ptoHours: parseFloat(ptoHours.toFixed(2)),
+    holidayHours: parseFloat(holidayHours.toFixed(2)),
+    totalHours: parseFloat(totalHours.toFixed(2)),
     regularHours: parseFloat(regularHours.toFixed(2)),
     overtimeHours: parseFloat(overtimeHours.toFixed(2)),
     regularEarnings: parseFloat(regularEarnings.toFixed(2)),
     overtimeEarnings: parseFloat(overtimeEarnings.toFixed(2)),
-    totalEarnings: parseFloat((regularEarnings + overtimeEarnings).toFixed(2))
+    ptoEarnings: parseFloat(ptoEarnings.toFixed(2)),
+    holidayEarnings: parseFloat(holidayEarnings.toFixed(2)),
+    totalEarnings: parseFloat(totalEarnings.toFixed(2))
   };
 }
 
@@ -61,9 +82,10 @@ export function calculateWeeklyEarningsWithOvertime(weekEntries) {
  * @param {Array<Object>} entries - Array of entry objects
  * @param {Date} periodStart - Start date of the period
  * @param {Date} periodEnd - End date of the period
+ * @param {Object} weeklyTimeOff - Map of weekId to {ptoHours, holidayHours} (optional)
  * @returns {Object} - Rollup data
  */
-export function calculateRollup(entries, periodStart, periodEnd) {
+export function calculateRollup(entries, periodStart, periodEnd, weeklyTimeOff = {}) {
   // Normalize dates to midnight for accurate comparison
   const normalizeDate = (d) => {
     const normalized = new Date(d);
@@ -104,13 +126,28 @@ export function calculateRollup(entries, periodStart, periodEnd) {
   let totalOvertimeHours = 0;
   let totalRegularEarnings = 0;
   let totalOvertimeEarnings = 0;
+  let totalPTOHours = 0;
+  let totalHolidayHours = 0;
+  let totalPTOEarnings = 0;
+  let totalHolidayEarnings = 0;
 
-  Object.values(entriesByWeek).forEach(weekEntries => {
-    const weekCalc = calculateWeeklyEarningsWithOvertime(weekEntries);
+  Object.entries(entriesByWeek).forEach(([weekId, weekEntries]) => {
+    // Get PTO/Holiday for this week
+    const weekTimeOff = weeklyTimeOff[weekId] || { ptoHours: 0, holidayHours: 0 };
+    const weekCalc = calculateWeeklyEarningsWithOvertime(
+      weekEntries,
+      weekTimeOff.ptoHours,
+      weekTimeOff.holidayHours
+    );
+
     totalRegularHours += weekCalc.regularHours;
     totalOvertimeHours += weekCalc.overtimeHours;
     totalRegularEarnings += weekCalc.regularEarnings;
     totalOvertimeEarnings += weekCalc.overtimeEarnings;
+    totalPTOHours += weekCalc.ptoHours;
+    totalHolidayHours += weekCalc.holidayHours;
+    totalPTOEarnings += weekCalc.ptoEarnings;
+    totalHolidayEarnings += weekCalc.holidayEarnings;
     totalEarnings += weekCalc.totalEarnings;
   });
 
@@ -122,15 +159,23 @@ export function calculateRollup(entries, periodStart, periodEnd) {
   const totalDays = allDates.length;
   const averageHoursPerDayIncludingNonWork = totalDays > 0 ? totalHours / totalDays : 0;
 
+  // Calculate total paid hours (work + PTO + Holiday)
+  const totalPaidHours = totalHours + totalPTOHours + totalHolidayHours;
+
   return {
     periodStart: formatDate(periodStart),
     periodEnd: formatDate(periodEnd),
-    totalHours: parseFloat(totalHours.toFixed(2)),
+    totalHours: parseFloat(totalHours.toFixed(2)), // Work hours only
+    ptoHours: parseFloat(totalPTOHours.toFixed(2)),
+    holidayHours: parseFloat(totalHolidayHours.toFixed(2)),
+    totalPaidHours: parseFloat(totalPaidHours.toFixed(2)), // All paid hours
     regularHours: parseFloat(totalRegularHours.toFixed(2)),
     overtimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
     totalEarnings: parseFloat(totalEarnings.toFixed(2)),
     regularEarnings: parseFloat(totalRegularEarnings.toFixed(2)),
     overtimeEarnings: parseFloat(totalOvertimeEarnings.toFixed(2)),
+    ptoEarnings: parseFloat(totalPTOEarnings.toFixed(2)),
+    holidayEarnings: parseFloat(totalHolidayEarnings.toFixed(2)),
     daysWorked,
     totalDays,
     averageHoursPerDay: parseFloat(averageHoursPerDay.toFixed(2)),
@@ -210,6 +255,10 @@ export function calculateComparison(currentRollup, previousRollup) {
     return {
       hoursChange: 0,
       hoursChangePercent: 0,
+      ptoChange: 0,
+      holidayChange: 0,
+      totalPaidChange: 0,
+      totalPaidChangePercent: 0,
       earningsChange: 0,
       earningsChangePercent: 0,
       daysWorkedChange: 0,
@@ -220,6 +269,16 @@ export function calculateComparison(currentRollup, previousRollup) {
   const hoursChange = currentRollup.totalHours - previousRollup.totalHours;
   const hoursChangePercent = previousRollup.totalHours > 0
     ? (hoursChange / previousRollup.totalHours) * 100
+    : 0;
+
+  const ptoChange = (currentRollup.ptoHours || 0) - (previousRollup.ptoHours || 0);
+  const holidayChange = (currentRollup.holidayHours || 0) - (previousRollup.holidayHours || 0);
+
+  const currentTotalPaid = currentRollup.totalPaidHours || currentRollup.totalHours;
+  const previousTotalPaid = previousRollup.totalPaidHours || previousRollup.totalHours;
+  const totalPaidChange = currentTotalPaid - previousTotalPaid;
+  const totalPaidChangePercent = previousTotalPaid > 0
+    ? (totalPaidChange / previousTotalPaid) * 100
     : 0;
 
   const earningsChange = currentRollup.totalEarnings - previousRollup.totalEarnings;
@@ -234,6 +293,10 @@ export function calculateComparison(currentRollup, previousRollup) {
   return {
     hoursChange: parseFloat(hoursChange.toFixed(2)),
     hoursChangePercent: parseFloat(hoursChangePercent.toFixed(1)),
+    ptoChange: parseFloat(ptoChange.toFixed(2)),
+    holidayChange: parseFloat(holidayChange.toFixed(2)),
+    totalPaidChange: parseFloat(totalPaidChange.toFixed(2)),
+    totalPaidChangePercent: parseFloat(totalPaidChangePercent.toFixed(1)),
     earningsChange: parseFloat(earningsChange.toFixed(2)),
     earningsChangePercent: parseFloat(earningsChangePercent.toFixed(1)),
     daysWorkedChange,

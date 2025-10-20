@@ -64,6 +64,9 @@ const prevWeekBtn = document.getElementById('prevWeekBtn');
 const nextWeekBtn = document.getElementById('nextWeekBtn');
 const exportWeekBtn = document.getElementById('exportWeekBtn');
 const exportAllBtn = document.getElementById('exportAllBtn');
+const summaryWorkHoursEl = document.getElementById('summaryWorkHours');
+const summaryPTOHoursEl = document.getElementById('summaryPTOHours');
+const summaryHolidayHoursEl = document.getElementById('summaryHolidayHours');
 const summaryTotalEl = document.getElementById('summaryTotal');
 const summaryRegularHoursEl = document.getElementById('summaryRegularHours');
 const summaryOvertimeHoursEl = document.getElementById('summaryOvertimeHours');
@@ -71,6 +74,8 @@ const summaryDaysEl = document.getElementById('summaryDays');
 const summaryAverageEl = document.getElementById('summaryAverage');
 const summaryEarningsEl = document.getElementById('summaryEarnings');
 const summaryOvertimeEarningsEl = document.getElementById('summaryOvertimeEarnings');
+const weeklyPTOEl = document.getElementById('weeklyPTO');
+const weeklyHolidayEl = document.getElementById('weeklyHoliday');
 const hourlyRateInputEl = document.getElementById('hourlyRateInput');
 const saveRateBtn = document.getElementById('saveRateBtn');
 const rateSaveIndicatorEl = document.getElementById('rateSaveIndicator');
@@ -167,6 +172,18 @@ function setupEventListeners() {
 
   // Save hourly rate
   saveRateBtn.addEventListener('click', saveHourlyRate);
+
+  // Weekly PTO/Holiday inputs
+  weeklyPTOEl.addEventListener('blur', saveWeeklyTimeOff);
+  weeklyHolidayEl.addEventListener('blur', saveWeeklyTimeOff);
+  weeklyPTOEl.addEventListener('input', () => {
+    // Update summary in real-time as user types
+    updateSummary(weekEntries);
+  });
+  weeklyHolidayEl.addEventListener('input', () => {
+    // Update summary in real-time as user types
+    updateSummary(weekEntries);
+  });
 }
 
 // Handle Google Sign-In
@@ -268,6 +285,9 @@ async function loadWeek(weekStart) {
     // Load entries from Firestore
     weekEntries = await loadWeekEntries(weekStart);
 
+    // Load weekly PTO/Holiday
+    await loadWeeklyTimeOff(weekStart);
+
     // Render the table
     renderTable(dates, weekEntries);
 
@@ -275,6 +295,60 @@ async function loadWeek(weekStart) {
     updateSummary(weekEntries);
   } catch (error) {
     console.error('Error loading week:', error);
+  }
+}
+
+// Load weekly PTO/Holiday hours from Firestore
+async function loadWeeklyTimeOff(weekStart) {
+  try {
+    const userId = getUserId();
+    const weekId = getWeekId(weekStart);
+    const weekRef = doc(db, `users/${userId}/weeks/${weekId}/meta`, 'timeOff');
+    const weekSnap = await getDoc(weekRef);
+
+    if (weekSnap.exists()) {
+      const data = weekSnap.data();
+      weeklyPTOEl.value = data.ptoHours || 0;
+      weeklyHolidayEl.value = data.holidayHours || 0;
+    } else {
+      weeklyPTOEl.value = 0;
+      weeklyHolidayEl.value = 0;
+    }
+  } catch (error) {
+    console.error('Error loading weekly time off:', error);
+    weeklyPTOEl.value = 0;
+    weeklyHolidayEl.value = 0;
+  }
+}
+
+// Save weekly PTO/Holiday hours to Firestore
+async function saveWeeklyTimeOff() {
+  try {
+    const userId = getUserId();
+    const weekId = getWeekId(currentWeekStart);
+    const weekRef = doc(db, `users/${userId}/weeks/${weekId}/meta`, 'timeOff');
+
+    const ptoHours = parseFloat(weeklyPTOEl.value) || 0;
+    const holidayHours = parseFloat(weeklyHolidayEl.value) || 0;
+
+    await setDoc(weekRef, {
+      ptoHours,
+      holidayHours,
+      lastUpdated: new Date().toISOString()
+    });
+
+    // Update earnings rollups for all affected periods
+    await updateEarningsRollups(currentWeekStart);
+
+    // Show save indicator
+    showSaveIndicator();
+
+    // Update summary
+    updateSummary(weekEntries);
+
+    console.log(`Saved weekly time off: PTO=${ptoHours}, Holiday=${holidayHours}`);
+  } catch (error) {
+    console.error('Error saving weekly time off:', error);
   }
 }
 
@@ -456,11 +530,12 @@ async function saveEntry(date, field, value) {
     const weekday = getWeekdayName(dateObj);
 
     // Update the field - preserve existing hourlyRate or use current one
+    const numericFields = ['hours'];
     const updatedData = {
       ...currentData,
       date,
       weekday,
-      [field]: field === 'hours' ? parseFloat(value) || 0 : value,
+      [field]: numericFields.includes(field) ? parseFloat(value) || 0 : value,
       hourlyRate: currentData.hourlyRate !== undefined ? currentData.hourlyRate : currentHourlyRate
     };
 
@@ -500,8 +575,11 @@ async function updateEarningsRollups(entryDate) {
       // Load all entries for this period
       const entries = await loadEntriesForPeriod(start, end);
 
-      // Calculate rollup
-      const rollup = calculateRollup(entries, start, end);
+      // Load weekly PTO/Holiday data for this period
+      const weeklyTimeOff = await loadWeeklyTimeOffForPeriod(userId, start, end);
+
+      // Calculate rollup with PTO/Holiday data
+      const rollup = calculateRollup(entries, start, end, weeklyTimeOff);
 
       // Save rollup to Firestore with combined ID
       const rollupRef = doc(db, `users/${userId}/earnings-rollups`, `${periodType}-${periodId}`);
@@ -512,6 +590,50 @@ async function updateEarningsRollups(entryDate) {
   } catch (error) {
     console.error('Error updating earnings rollups:', error);
   }
+}
+
+// Load weekly PTO/Holiday data for all weeks in a date range
+async function loadWeeklyTimeOffForPeriod(userId, startDate, endDate) {
+  const weeklyTimeOff = {};
+
+  // Get all unique weeks in the date range
+  const dates = [];
+  const current = new Date(startDate);
+  current.setHours(0, 0, 0, 0);
+
+  const end = new Date(endDate);
+  end.setHours(0, 0, 0, 0);
+
+  while (current <= end) {
+    dates.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Get unique week IDs
+  const weekIds = [...new Set(dates.map(d => getWeekId(d)))];
+
+  // Load PTO/Holiday for each week
+  for (const weekId of weekIds) {
+    const weekRef = doc(db, `users/${userId}/weeks/${weekId}/meta`, 'timeOff');
+
+    try {
+      const weekSnap = await getDoc(weekRef);
+      if (weekSnap.exists()) {
+        const data = weekSnap.data();
+        weeklyTimeOff[weekId] = {
+          ptoHours: parseFloat(data.ptoHours) || 0,
+          holidayHours: parseFloat(data.holidayHours) || 0
+        };
+      } else {
+        weeklyTimeOff[weekId] = { ptoHours: 0, holidayHours: 0 };
+      }
+    } catch (error) {
+      console.error(`Error loading PTO/Holiday for week ${weekId}:`, error);
+      weeklyTimeOff[weekId] = { ptoHours: 0, holidayHours: 0 };
+    }
+  }
+
+  return weeklyTimeOff;
 }
 
 // Load entries for a specific date range
@@ -565,10 +687,17 @@ function updateTotalHours(entries) {
 function updateSummary(entries) {
   const summary = generateSummary(entries);
 
-  // Calculate overtime using the weekly overtime calculation
-  const overtimeCalc = calculateWeeklyEarningsWithOvertime(entries);
+  // Get weekly PTO/Holiday from inputs
+  const weeklyPTO = parseFloat(weeklyPTOEl.value) || 0;
+  const weeklyHoliday = parseFloat(weeklyHolidayEl.value) || 0;
 
-  summaryTotalEl.textContent = summary.totalHours;
+  // Calculate overtime using the weekly overtime calculation
+  const overtimeCalc = calculateWeeklyEarningsWithOvertime(entries, weeklyPTO, weeklyHoliday);
+
+  summaryWorkHoursEl.textContent = overtimeCalc.workHours.toFixed(1);
+  summaryPTOHoursEl.textContent = overtimeCalc.ptoHours.toFixed(1);
+  summaryHolidayHoursEl.textContent = overtimeCalc.holidayHours.toFixed(1);
+  summaryTotalEl.textContent = overtimeCalc.totalHours.toFixed(1);
   summaryRegularHoursEl.textContent = overtimeCalc.regularHours.toFixed(1);
   summaryOvertimeHoursEl.textContent = overtimeCalc.overtimeHours.toFixed(1);
   summaryDaysEl.textContent = summary.daysWorked;
